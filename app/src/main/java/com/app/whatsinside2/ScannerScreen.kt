@@ -73,12 +73,14 @@ fun ScannerScreen(navController: NavController) {
                             isScanning = false
                             Log.d("ScannerScreen", "Barcode gefunden: $barcode")
 
-                            navController.navigate(Screen.Details.route) {
+                            navController.navigate(Screen.Details.createRoute(barcode)) {
                                 popUpTo(Screen.Home.route)
                             }
                         }
                     }
                 )
+
+
 
                 Button(
                     onClick = { navController.popBackStack() },

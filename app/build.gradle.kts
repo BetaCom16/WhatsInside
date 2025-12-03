@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-kapt")
 }
 
 android {
@@ -44,6 +45,7 @@ android {
 dependencies {
     val nav_version = "2.8.0"
     val camera_version = "1.3.4"
+    val room_version = "2.6.1"
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -65,6 +67,18 @@ dependencies {
 
     //Zur Erkennung der Barcodes auf der Kamera
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    //Netzwerk und JSON-Konverter
+    implementation("com.squareup.retrofit2:retrofit2:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    //Bilder herunterladen mit Coil
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    //Datenbank mit Room
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    kapt("androidx.room:room-compiler:$room_version")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

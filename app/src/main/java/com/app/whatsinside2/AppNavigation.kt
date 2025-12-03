@@ -13,15 +13,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.pantryapp.ScannerScreen
 
 sealed class Screen(val route: String){
     object Home : Screen("home_screen")
     object Scanner : Screen("scanner_screen")
-    object Details : Screen("details_screen")
+    object Details : Screen("details_screen/{barcode}"){
+        fun createRoute(barcode: String) = "details_screen/$barcode"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,23 +52,15 @@ fun WhatsInside2() {
                 ScannerScreen(navController = navController)
             }
 
-            composable(route = Screen.Details.route) {
-                DetailsScreen(navController = navController)
-            }
-        }
-    }
-}
+            composable(
+                route = Screen.Details.route,
+                arguments = listOf(navArgument("barcode") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val barcode = backStackEntry.arguments?.getString("barcode")
 
-@Composable
-fun HomeScreen(navController : NavController){
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally){
-            Text(text = "Hier ist deine Produktliste")
-            Button(onClick = { navController.navigate(Screen.Scanner.route) }) {
-                Text("Neues Produkt scannen")
+                if(barcode != null) {
+                    DetailsScreen(navController = navController, barcode = barcode)
+                }
             }
         }
     }
