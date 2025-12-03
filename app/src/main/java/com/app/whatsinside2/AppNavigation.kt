@@ -65,19 +65,3 @@ fun WhatsInside2() {
         }
     }
 }
-
-@Composable
-fun DetailsScreen(navController : NavController) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally){
-            Text(text = "Produktdetails")
-            Button(onClick = { navController.popBackStack(Screen.Home.route, inclusive = false )
-            }) {
-                Text("Zurück zur Liste")
-            }
-        }
-    }
-}
