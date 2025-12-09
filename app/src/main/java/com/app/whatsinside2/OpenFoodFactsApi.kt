@@ -1,5 +1,7 @@
 package com.app.whatsinside2
 
+import androidx.compose.ui.geometry.Rect
+import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
@@ -29,11 +31,28 @@ interface OpenFoodFactsService{
 }
 
 object RetrofitInstance {
-    private const val BASE_URL = "https://world.openfoodfacts.org/"
+
+    //Deutscher Server von OpenFoodFacts
+    private const val BASE_URL = "https://de.openfoodfacts.org/"
+
+    private val httpClient = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val original = chain.request()
+
+            //Vorstellung der Anwendung
+            val request = original.newBuilder()
+                .header("User-Agent", "WhatsInsideAndroidApp - Version 1.0")
+                .method(original.method, original.body)
+                .build()
+
+            chain.proceed(request)
+        }
+        .build()
 
     val api: OpenFoodFactsService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
+            .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(OpenFoodFactsService::class.java)

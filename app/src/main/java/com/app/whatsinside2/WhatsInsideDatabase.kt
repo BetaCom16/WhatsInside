@@ -23,7 +23,7 @@ interface ProductDao {
     suspend fun deleteProduct(product: ProductEntity)
 }
 
-@Database(entities = [ProductEntity::class], version = 1)
+@Database(entities = [ProductEntity::class], version = 2, exportSchema = false)
 abstract class WhatsInsideDatabase : RoomDatabase() {
     abstract fun productDao(): ProductDao
 
@@ -32,12 +32,15 @@ abstract class WhatsInsideDatabase : RoomDatabase() {
         private var INSTANCE: WhatsInsideDatabase? = null
 
         fun getDatabase(context: Context): WhatsInsideDatabase {
-            return INSTANCE ?: synchronized(this){
+            return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     WhatsInsideDatabase::class.java,
-                    "WhatsInsideDatabase"
-                ).build()
+                    "whats_inside_db"
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+
                 INSTANCE = instance
                 instance
             }

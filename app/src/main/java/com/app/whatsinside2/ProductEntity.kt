@@ -5,12 +5,18 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "products")
 data class ProductEntity(
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+
     val barcode: String,
 
     val name: String,
     val imageUrl: String?,
     val calories: Double?,
 
-    val addedAt: Long = System.currentTimeMillis()
+    //Anzahl und Ablaufdatum
+    val quantity: Int,
+    val expirationDate: Long?,
+
+    val addedAt: Long = System.currentTimeMillis(),
 )
