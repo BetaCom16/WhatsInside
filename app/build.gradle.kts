@@ -43,6 +43,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.material3)
     val nav_version = "2.8.0"
     val camera_version = "1.3.4"
     val room_version = "2.6.1"

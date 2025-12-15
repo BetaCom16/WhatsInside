@@ -9,7 +9,6 @@ data class ProductEntity(
     val id: Int = 0,
 
     val barcode: String,
-
     val name: String,
     val imageUrl: String?,
     val calories: Double?,
@@ -17,6 +16,10 @@ data class ProductEntity(
     //Anzahl und Ablaufdatum
     val quantity: Int,
     val expirationDate: Long?,
-
     val addedAt: Long = System.currentTimeMillis(),
+
+    //Marke, Preis und Lagerort
+    val brand: String? = null,
+    val price: Double? = null,
+    val location: String? = null
 )

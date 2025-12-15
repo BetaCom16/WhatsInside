@@ -49,57 +49,43 @@ import java.util.Locale
 fun HomeScreen(navController : NavController){
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
     val db = WhatsInsideDatabase.getDatabase(context)
-
     val productList by db.productDao().getAllProducts().collectAsState(initial = emptyList())
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate(Screen.Scanner.route) }) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Scannen")
-            }
+    if(productList.isEmpty()){
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Der Vorratsschrank ist leer. \nFüge mit dem \"+\" ein Produkt hinzu!",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
-    ) { innerPadding ->
-
-        if(productList.isEmpty()){
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Der Vorratsschrank ist leer. Füge mit dem "+" ein Produkt hinzu!",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .padding(innerPadding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(productList) { product ->
-                    ProductItem(
-                        product = product,
-                        onDeleteClick = {
-                            scope.launch {
-                                db.productDao().deleteProduct(product)
-                            }
-                        },
-                        onClick = {
-                            navController.navigate(Screen.Details.createRoute(product.barcode))
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(productList) { product ->
+                ProductItem(
+                    product = product,
+                    onDeleteClick = {
+                        scope.launch {
+                            db.productDao().deleteProduct(product)
                         }
-                    )
-                }
+                    },
+                    onClick = {
+                        navController.navigate(Screen.Details.createRoute(product.barcode, product.id))
+                    }
+                )
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
