@@ -1,6 +1,5 @@
-package com.app.whatsinside2
+package com.app.whatsinside2.Model
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,21 +43,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
+import com.app.whatsinside2.DetailsViewModel
+import com.app.whatsinside2.LocationEntity
+import com.app.whatsinside2.Screen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,123 +67,55 @@ import java.util.Locale
 fun DetailsScreen(
     navController: NavController,
     barcode: String,
-    productId: Int
+    productId: Int,
+    // ViewModel Injection
+    viewModel: DetailsViewModel = viewModel()
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val db = WhatsInsideDatabase.getDatabase(context)
+    // Sobald sich im ViewModel etwas ändert, wird die UI automatisch neu gebaut
+    val name by viewModel.name.collectAsState()
+    val brand by viewModel.brand.collectAsState()
+    val imageUrl by viewModel.imageUrl.collectAsState()
+    val calories by viewModel.calories.collectAsState()
 
-    // Holt alle Lagerorte aus der Datenbank
-    val allLocations by db.locationDao().getAllLocations().collectAsState(initial = emptyList())
+    val quantity by viewModel.quantity.collectAsState()
+    val location by viewModel.location.collectAsState()
+    val expirationDate by viewModel.expirationDate.collectAsState()
 
-    var name by remember { mutableStateOf("Laden...") }
-    var brand by remember { mutableStateOf<String?>(null) }
-    var imageUrl by remember { mutableStateOf<String?>(null) }
-    var calories by remember { mutableStateOf<Double?>(null) }
-    var location by remember { mutableStateOf("") }
+    // UI-Status
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val showManualDialog by viewModel.showManualDialog.collectAsState()
 
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var showManualDialog by remember { mutableStateOf(false) }
+    val allLocations by viewModel.allLocations.collectAsState(initial = emptyList())
 
-    var quantity by remember { mutableIntStateOf(1) }
-    var selectedDateMillis by remember { mutableStateOf<Long?>(null) }
+    // Lokaler State nur für UI-Elemente
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val dateString = remember(selectedDateMillis) {
-        if(selectedDateMillis != null){
+    // Hilfs-Variable für den Datumstext inklusive Umwandlung des Datums
+    val dateString = remember(expirationDate) {
+        if(expirationDate != null){
             val formatter = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY)
-            formatter.format(Date(selectedDateMillis!!))
+            formatter.format(Date(expirationDate!!))
         } else{
             "Kein Datum gewählt"
         }
     }
 
+    // Lädt alle Daten beim Start
     LaunchedEffect(barcode, productId) {
-        if(barcode == "manual_entry"){
-            isLoading = false
-            showManualDialog = true
-            return@LaunchedEffect
-        }
-
-        try {
-            if (productId != -1) {
-                // Bearbeiten aus vorhandener DB
-                val existingProduct = db.productDao().getProductById(productId)
-                if (existingProduct != null) {
-                    name = existingProduct.name
-                    brand = existingProduct.brand
-                    // HTTPS erzwingen für DB-Bilder
-                    imageUrl = existingProduct.imageUrl?.replace("http://", "https://")
-                    calories = existingProduct.calories
-                    quantity = existingProduct.quantity
-                    selectedDateMillis = existingProduct.expirationDate
-                    location = existingProduct.location ?: ""
-                } else {
-                    errorMessage = "Produkt nicht mehr in Datenbank gefunden."
-                }
-            } else {
-                // Neu von der API übernommen
-                val response = RetrofitInstance.api.getProduct(barcode)
-                if (response.status == 1 && response.product != null) {
-                    name = response.product.product_name ?: "Unbekannt"
-                    brand = response.product.brands
-                    // HTTPS erzwingen für API-Bilder
-                    imageUrl = response.product.image_url?.replace("http://", "https://")
-                    calories = response.product.nutriments?.energy_100g
-                } else {
-                    errorMessage = "Produkt online nicht gefunden."
-                }
-            }
-        } catch (e: Exception) {
-            errorMessage = "Fehler: ${e.message}"
-        } finally {
-            isLoading = false
-        }
-    }
-
-    fun saveProduct(
-        idToSave: Int,
-        barcodeToSave: String,
-        nameToSave: String,
-        brandToSave: String?,
-        imgToSave: String?,
-        calToSave: Double?,
-        qtyToSave: Int,
-        locToSave: String?,
-        dateToSave: Long?
-    ) {
-        scope.launch{
-            if(!locToSave.isNullOrBlank()){
-                val existingLoc = db.locationDao().getLocationByName(locToSave)
-                if(existingLoc == null){
-                    db.locationDao().insertLocation(LocationEntity(name = locToSave))
-                }
-            }
-
-            val entity = ProductEntity(
-                id = idToSave,
-                barcode = barcodeToSave,
-                name = nameToSave,
-                brand = brandToSave,
-                imageUrl = imgToSave,
-                calories = calToSave,
-                quantity = qtyToSave,
-                location = locToSave,
-                expirationDate = dateToSave
-            )
-            db.productDao().insertProduct(entity)
-
-            Toast.makeText(context, "Gespeichert!", Toast.LENGTH_SHORT).show()
-            navController.popBackStack(Screen.Home.route, inclusive = false)
-        }
+        viewModel.loadData(barcode, productId)
     }
 
     if(showDatePicker){
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDateMillis)
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = expirationDate)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = { TextButton(onClick = { selectedDateMillis = datePickerState.selectedDateMillis; showDatePicker = false }) { Text("OK") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.updateDate(datePickerState.selectedDateMillis)
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Abbrechen") } }
         ) { DatePicker(state = datePickerState) }
     }
@@ -194,23 +125,21 @@ fun DetailsScreen(
             barcode = if(barcode == "manual_entry") "" else barcode,
             availableLocations = allLocations,
             onDismiss = {
-                showManualDialog = false
+                viewModel.showManualDialog.value = false
                 if(barcode == "manual_entry") navController.popBackStack()
             },
             onSave = { newName, newBrand, newPrice, newLocation, newDate ->
-                scope.launch {
-                    saveProduct(
-                        idToSave = 0,
-                        barcodeToSave = if(barcode == "manual_entry") "MANUAL_${System.currentTimeMillis()}" else barcode,
-                        nameToSave = newName,
-                        brandToSave = newBrand,
-                        imgToSave = null,
-                        calToSave = null,
-                        qtyToSave = 1,
-                        locToSave = newLocation,
-                        dateToSave = newDate
-                    )
-                }
+                // Hier wird die Funktion zum Speichern des Produkts aus dem DetailViewModel geholt
+                viewModel.saveProduct(
+                    idToSave = 0,
+                    barcodeToSave = if(barcode == "manual_entry") "MANUAL_${System.currentTimeMillis()}" else barcode,
+                    overrideName = newName,
+                    overrideBrand = newBrand,
+                    overridePrice = newPrice,
+                    overrideLocation = newLocation,
+                    overrideDate = newDate,
+                    onSuccess = { navController.popBackStack(Screen.Home.route, inclusive = false) }
+                )
             }
         )
     }
@@ -219,6 +148,13 @@ fun DetailsScreen(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
+        /**
+         * Folgender if-Block bis zum else nach dem else if dient der Anzeige von Informationen,
+         * sobald ein Scan nicht erfolgreich war, z.B. weil das Produkt nicht über die API
+         * in der OpenFoodFacts Datenbank gefunden wurde oder wegen eines Timeouts. Der Nutzer
+         * bekommt die Möglichkeit, das Produkt einfach manuell einzutragen oder den Vorgang
+         * abzubrechen
+        */
         if (isLoading) {
             CircularProgressIndicator()
         } else if (errorMessage != null) {
@@ -226,50 +162,95 @@ fun DetailsScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(48.dp)
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Hoppla!", style = MaterialTheme.typography.headlineSmall)
-                Text(text = errorMessage ?: "", textAlign = TextAlign.Center)
+
+                Text(
+                    text = "Hoppla!",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+
+                Text(
+                    text = errorMessage ?: "",
+                    textAlign = TextAlign.Center
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
-                Button(onClick = { showManualDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = null)
+
+                Button(onClick = {
+                    viewModel.showManualDialog.value = true
+                }) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null
+                    )
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Produkt anlegen")
+
+                    Text(
+                        text = "Produkt anlegen"
+                    )
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = { navController.popBackStack() }) { Text(text = "Abbrechen") }
+
+                TextButton(onClick = {
+                    navController.popBackStack()
+                }) {
+                    Text(
+                        text = "Abbrechen"
+                    )
+                }
             }
         } else {
+            /**
+             * Dieser if-Block beinhaltet die Darstellung einer normalen Detailseite, sofern ein Scan
+             * des Barcodes und die daraufhin stattfindende Abfrage über die API an OpenFoodFacts
+             * erfolgreich war. Der Nutzer kann nun die Menge, das MHD und den Lagerort angeben und
+             * anschließend das Produkt speichern
+             */
             if(barcode != "manual_entry"){
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Zeigt das Produktbild an
+                    // Bild
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
                         if (imageUrl != null) {
                             AsyncImage(
                                 model = imageUrl,
-                                contentDescription = "Produktbild",
+                                contentDescription = null,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
-                            // Platzhalter, wenn kein Bild da ist
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Icon(
-                                    Icons.Default.Image, // Standard Icon
-                                    contentDescription = "Kein Bild",
+                                    Icons.Default.Image,
+                                    null,
                                     modifier = Modifier.size(64.dp),
                                     tint = MaterialTheme.colorScheme.surfaceVariant
                                 )
-                                Text("Kein Bild", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = "Kein Bild",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    if(brand != null){
+                    // Zeigt die Marke an, sofern diese in der DB vorhanden ist
+                    if (brand != null) {
                         Text(
                             text = brand ?: "",
                             style = MaterialTheme.typography.titleMedium,
@@ -277,53 +258,108 @@ fun DetailsScreen(
                         )
                     }
 
-                    Text(text = name, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+                    // Zeigt den Namen des Produkts an
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        textAlign = TextAlign.Center
+                    )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text("Menge:", style = MaterialTheme.typography.titleMedium)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                        IconButton(onClick = { if(quantity > 1) quantity-- }) { Icon(Icons.Default.Remove, "Weniger") }
-                        Text(text = quantity.toString(), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(horizontal = 16.dp))
-                        IconButton(onClick = { quantity++ }) { Icon(Icons.Default.Add, "Mehr") }
+                    // Menge des Produkts angeben
+                    Text(
+                        text = "Menge:",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        IconButton(
+                            onClick = {
+                                viewModel.updateQuantity(-1)
+                            }) {
+                            Icon(
+                                Icons.Default.Remove,
+                                "Weniger"
+                            ) }
+                        Text(
+                            text = quantity.toString(),
+                            style = MaterialTheme.typography.headlineLarge,
+                            modifier = Modifier.padding(horizontal = 16.dp
+                            )
+                        )
+                        IconButton(
+                            onClick = {
+                                viewModel.updateQuantity(1)
+                            }) {
+                            Icon(Icons.Default.Add,
+                                "Mehr"
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
+                    // Lagerort des Produkts aus dem Dropdown oder neu vergeben
                     LocationDropdown(
                         options = allLocations,
                         selectedLocation = location,
-                        onLocationChange = { location = it }
+                        onLocationChange = { viewModel.updateLocation(it) }
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Text("Ablaufdatum:", style = MaterialTheme.typography.headlineMedium)
+                    // MHD des Produkts festlegen
+                    Text(
+                        text = "Ablaufdatum:",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.DateRange, contentDescription = null)
+
+                    OutlinedButton(
+                        onClick = {
+                            showDatePicker = true
+                        }) {
+                        Icon(
+                            Icons.Default.DateRange,
+                            contentDescription = null
+                        )
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = dateString)
+
+                        Text(
+                            text = dateString
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
-                    if (calories != null) Text(text = "Energie/100g: $calories kcal")
+
+                    // Zeigt die Kalorien des Produkts auf 100g an, falls dieser Wert vorhanden ist
+                    if (calories != null){
+                        Text(
+                            text = "Energie/100g: $calories kcal"
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
 
+                    /**
+                     * Folgender Codeblock ermöglicht dem Nutzer das Duplizieren eines bereits
+                     * vorhandenen Produkts mithilfe eines Buttons. Anwendungsfall hierbei wäre,
+                     * wenn das Produkt mehrfach vorhanden ist, jedoch mit unterschiedlichen
+                     * Mindesthaltbarkeitsdaten
+                     */
                     if (productId != -1) {
                         Spacer(modifier = Modifier.height(16.dp))
                         OutlinedButton(
                             onClick = {
-                                saveProduct(
+                                viewModel.saveProduct(
                                     idToSave = 0,
                                     barcodeToSave = barcode,
-                                    nameToSave = name,
-                                    brandToSave = brand,
-                                    imgToSave = imageUrl,
-                                    calToSave = calories,
-                                    qtyToSave = quantity,
-                                    locToSave = location,
-                                    dateToSave = selectedDateMillis
+                                    onSuccess = { navController.popBackStack(Screen.Home.route, inclusive = false) }
                                 )
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -335,25 +371,33 @@ fun DetailsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Speichern des Produkts
                     Button(
                         onClick = {
-                            saveProduct(
+                            viewModel.saveProduct(
                                 idToSave = if (productId != -1) productId else 0,
                                 barcodeToSave = barcode,
-                                nameToSave = name,
-                                brandToSave = brand,
-                                imgToSave = imageUrl,
-                                calToSave = calories,
-                                qtyToSave = quantity,
-                                locToSave = location,
-                                dateToSave = selectedDateMillis
+                                onSuccess = { navController.popBackStack(Screen.Home.route, inclusive = false) }
                             )
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.Save, null)
+                        Icon(
+                            Icons.Default.Save,
+                            null
+                        )
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (productId != -1) "Änderungen speichern" else "In den Vorratsschrank legen")
+
+                        // Produkt bereits in der DB vorhanden - dann können Änderungen daran gespeichert werden
+                        // Produkt zum ersten Mal hinzugefügt, dann nur die Möglichkeit das Produkt anzulegen
+                        Text(
+                            text = if (productId != -1) {
+                                "Änderungen speichern"
+                            } else {
+                                "In den Vorratsschrank legen"
+                            }
+                        )
                     }
                 }
             }
@@ -361,6 +405,7 @@ fun DetailsScreen(
     }
 }
 
+// Folgender Code beinhaltet Hilfsfunktionen für UI-Elemente
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocationDropdown(
@@ -373,13 +418,19 @@ fun LocationDropdown(
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth(0.5f)
+        modifier = Modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
             value = selectedLocation,
             onValueChange = { onLocationChange(it) },
-            label = { Text("Lagerort") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            label = {
+                Text(
+                    text = "Lagerort"
+                )
+            },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier.menuAnchor().fillMaxWidth()
         )
@@ -391,7 +442,11 @@ fun LocationDropdown(
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option.name) },
+                        text = {
+                            Text(
+                                text = option.name
+                            )
+                        },
                         onClick = {
                             onLocationChange(option.name)
                             expanded = false
@@ -403,6 +458,11 @@ fun LocationDropdown(
     }
 }
 
+
+/**
+ * Folgender Codebereich beinhaltet die UI-Elemente für den Dialog, um manuell Produkte anlegen
+ * zu können
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManualProductDialog(
@@ -432,9 +492,25 @@ fun ManualProductDialog(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = { selectedDateMillis = datePickerState.selectedDateMillis; showDatePicker = false }) { Text("OK") } },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Abbrechen") } }
-        ) { DatePicker(state = datePickerState) }
+                TextButton(onClick = {
+                    selectedDateMillis = datePickerState.selectedDateMillis; showDatePicker = false
+                }) {
+                    Text(
+                        text = "OK"
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDatePicker = false
+                }) {
+                    Text(
+                        text = "Abbrechen")
+                }
+            }
+        ) { DatePicker(
+            state = datePickerState
+        ) }
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -464,39 +540,46 @@ fun ManualProductDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Eingabefeld für den Produktnamen
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Produktname *") },
+                    label = {
+                        Text("Produktname *"
+                        ) },
                     isError = name.isBlank(),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Eingabefeld für die Marke
                 OutlinedTextField(
                     value = brand,
                     onValueChange = { brand = it },
-                    label = { Text("Marke (Optional)") },
+                    label = {
+                        Text("Marke (Optional)"
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Das Eingabefeld für den Preis des Produkts. Ändert die Tastatur auf Zahlen
                 OutlinedTextField(
                     value = priceText,
-                    onValueChange = {
-                        if(it.all { char -> char.isDigit() || char == '.' || char == ',' }) {
-                            priceText = it
-                        }
+                    onValueChange = { if(it.all { char -> char.isDigit() || char == '.' || char == ',' }) priceText = it },
+                    label = {
+                        Text(text = "Preis € (Optional)"
+                        )
                     },
-                    label = { Text("Preis € (Optional)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Dropdown-Menü für die Angabe des Lagerortes
                 LocationDropdown(
                     options = availableLocations,
                     selectedLocation = location,
@@ -505,33 +588,53 @@ fun ManualProductDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(
-                    onClick = { showDatePicker = true },
+                // Das Eingabefeld für das MHD des Produkts
+                OutlinedButton(onClick = {
+                    showDatePicker = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.DateRange, null)
+                    Icon(
+                        Icons.Default.DateRange,
+                        null
+                    )
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(dateString)
+
+                    Text(
+                        text = dateString
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Zwei Buttons. Einer zum Abbrechen, der andere zum Speichern
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss){ Text(text = "Abbrechen") }
+                    TextButton(onClick =
+                        onDismiss
+                    ){
+                        Text(
+                            text = "Abbrechen"
+                        )
+                    }
+
                     Spacer(modifier = Modifier.width(8.dp))
+
                     Button(
                         onClick = {
                             val price = priceText.replace(',', '.').toDoubleOrNull()
                             val brandToSave = if(brand.isBlank()) null else brand
                             val locToSave = if(location.isBlank()) null else location
-
                             onSave(name, brandToSave, price, locToSave, selectedDateMillis)
                         },
                         enabled = name.isNotBlank()
-                    ) { Text(text = "Speichern") }
+                    ) {
+                        Text(
+                            text = "Speichern"
+                        )
+                    }
                 }
             }
         }

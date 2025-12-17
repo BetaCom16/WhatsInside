@@ -1,4 +1,4 @@
-package com.app.whatsinside2
+package com.app.whatsinside2.Model
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,36 +26,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
+import com.app.whatsinside2.ViewModel.HomeViewModel
+import com.app.whatsinside2.ProductEntity
+import com.app.whatsinside2.Screen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController : NavController){
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val db = WhatsInsideDatabase.getDatabase(context)
-    val productList by db.productDao().getAllProducts().collectAsState(initial = emptyList())
+fun HomeScreen(
+    navController: NavController,
+    viewModel: HomeViewModel = viewModel()
+) {
+    // Das UI holt sich die Daten vom HomeViewModel
+    val productList by viewModel.allProducts.collectAsState(initial = emptyList())
 
-    if(productList.isEmpty()){
+    if (productList.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Der Vorratsschrank ist leer. \nFüge mit dem \"+\" ein Produkt hinzu!",
+                text = "Der Vorratsschrank ist leer.\nFüge mit dem \"+\" ein Produkt hinzu!",
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.bodyLarge
             )
@@ -70,9 +72,7 @@ fun HomeScreen(navController : NavController){
                 ProductItem(
                     product = product,
                     onDeleteClick = {
-                        scope.launch {
-                            db.productDao().deleteProduct(product)
-                        }
+                        viewModel.deleteProduct(product)
                     },
                     onClick = {
                         navController.navigate(Screen.Details.createRoute(product.barcode, product.id))
@@ -83,19 +83,18 @@ fun HomeScreen(navController : NavController){
     }
 }
 
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductItem(
     product: ProductEntity,
     onDeleteClick: () -> Unit,
     onClick: () -> Unit
 ) {
+    // Datumsformatierung
     val dateString = remember(product.expirationDate) {
-        if(product.expirationDate != null){
+        if (product.expirationDate != null) {
             val formatter = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY)
             "MHD: " + formatter.format(Date(product.expirationDate))
-        } else{
+        } else {
             ""
         }
     }
@@ -111,36 +110,19 @@ fun ProductItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.width(40.dp)
-            ) {
-                Text(
-                    text = "${product.quantity}x",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.width(40.dp)) {
+                Text("${product.quantity}x", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             }
-
             Spacer(modifier = Modifier.width(8.dp))
-
-            if(product.imageUrl != null) {
-                AsyncImage(
-                    model = product.imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(50.dp)
-                )
-            } else{
-                Box(modifier = Modifier.size(50.dp), contentAlignment = Alignment.Center) {
-                    Text("?", style = MaterialTheme.typography.headlineSmall)
-                }
+            if (product.imageUrl != null) {
+                AsyncImage(model = product.imageUrl, contentDescription = null, modifier = Modifier.size(50.dp))
+            } else {
+                Box(modifier = Modifier.size(50.dp), contentAlignment = Alignment.Center) { Text("?", style = MaterialTheme.typography.headlineSmall) }
             }
-
             Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                if(!product.brand.isNullOrBlank()){
+                if (!product.brand.isNullOrBlank()) {
                     Text(
                         text = product.brand,
                         style = MaterialTheme.typography.bodySmall,
@@ -154,32 +136,27 @@ fun ProductItem(
                     maxLines = 1
                 )
 
-                if(dateString.isNotEmpty()){
+                if (dateString.isNotEmpty()) {
                     Text(
-                        text = dateString,
+                        text = if (System.currentTimeMillis() > (product.expirationDate ?: Long.MAX_VALUE)){
+                            "${dateString} - ABGELAUFEN!"
+                        } else{
+                            dateString
+                        },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if(System.currentTimeMillis() > (product.expirationDate ?: Long.MAX_VALUE))
+                        color = if (System.currentTimeMillis() > (product.expirationDate ?: Long.MAX_VALUE)){
                             MaterialTheme.colorScheme.error
-                        else
+                        } else{
                             Color.Gray
-
+                        }
                     )
                 }
-
-                if(product.calories != null){
-                    Text(
-                        text = "${product.calories} kcal/100g",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                if (product.calories != null) {
+                    Text(text = "${product.calories} kcal/100g", style = MaterialTheme.typography.bodySmall)
                 }
             }
-
             IconButton(onClick = onDeleteClick) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Löschen",
-                    tint = MaterialTheme.colorScheme.error
-                )
+                Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
             }
         }
     }

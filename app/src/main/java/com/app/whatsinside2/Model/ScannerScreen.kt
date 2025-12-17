@@ -1,4 +1,4 @@
-package com.app.whatsinside2
+package com.app.whatsinside2.Model
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -29,6 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +49,9 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.app.whatsinside2.ScannerViewModel
 import com.app.whatsinside2.Screen
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -55,19 +59,26 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
-
 @Composable
-fun ScannerScreen(navController: NavController) {
+fun ScannerScreen(
+    navController: NavController,
+    // Hier wird das ViewModel geholt
+    viewModel: ScannerViewModel = viewModel()
+) {
     val context = LocalContext.current
 
-    var isScanning by remember { mutableStateOf(true) }
+    // Beobachtet den Zustand, ob gerade gescannt wird
+    val isScanning by viewModel.isScanning.collectAsState()
 
+    // Sobald diese Activity aufgerufen wird, wird automatisch die Kamera gestartet
+    LaunchedEffect(Unit) {
+        viewModel.startScanning()
+    }
+
+    // Prüft, ob die Kamerarechte erteilt wurden
     var hasCameraPermission by remember {
         mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -77,19 +88,17 @@ fun ScannerScreen(navController: NavController) {
         hasCameraPermission = isGranted
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (hasCameraPermission) {
             Box(modifier = Modifier.fillMaxSize()) {
                 CameraPreview(
                     modifier = Modifier.fillMaxSize(),
                     onBarcodeDetected = { barcode ->
+                        // Prüft im ViewModel, ob ein Barcode gefunden wurde
                         if (isScanning) {
-                            isScanning = false
-                            Log.d("ScannerScreen", "Barcode gefunden: $barcode")
+                            viewModel.onBarcodeFound() // Ändert den Zustand beim Fund eines Barcodes
 
+                            Log.d("ScannerScreen", "Barcode gefunden: $barcode")
                             navController.navigate(Screen.Details.createRoute(barcode)) {
                                 popUpTo(Screen.Home.route)
                             }
@@ -97,13 +106,10 @@ fun ScannerScreen(navController: NavController) {
                     }
                 )
 
-                // Ein Overlay über der Kamera, um den unwichtigen Bereich zu verdunkeln
                 ScannerOverlay(modifier = Modifier.fillMaxSize())
 
                 Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 32.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Button(
@@ -115,38 +121,47 @@ fun ScannerScreen(navController: NavController) {
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     ) {
-                        Icon(Icons.Default.Edit, contentDescription = null)
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null
+                        )
+
                         Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
-                            text = "Manuell hinzufügen"
+                            text = "Ohne Scan hinzufügen"
                         )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Ein Zurück-Button unten am Bildschirm
-                    Button(
-                        onClick = { navController.popBackStack() }
-                    ) {
-                        Text("Zurück zum Vorratsschrank")
+                    Button(onClick = { navController.popBackStack() }) {
+                        Text(
+                            text = "Zurück zum Vorratsschrank"
+                        )
                     }
                 }
             }
-
         } else {
+            /**
+             * Folgender Column-Block weißt den User dazu an, der App Rechte auf die Kamera
+             * zu erteilen, um Produkte scannen zu können.
+             */
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "Kamera wird benötigt")
+                Text(
+                    text = "Kamera wird benötigt"
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(onClick = {
                     permissionLauncher.launch(Manifest.permission.CAMERA)
                 }) {
-                    Text(text = "Kamera freigeben")
+                    Text(
+                        text = "Kamera freigeben"
+                    )
                 }
-
                 Spacer(modifier = Modifier.height(8.dp))
-
                 Button(onClick = { navController.popBackStack() }) {
                     Text("Abbrechen")
                 }
@@ -155,42 +170,36 @@ fun ScannerScreen(navController: NavController) {
     }
 }
 
+
+// Hilfsfunktionen für die UI-Elemente
+
 @Composable
 fun ScannerOverlay(modifier: Modifier = Modifier){
     Canvas(modifier = modifier) {
-        // Der rechteckige Scan-Bereich für Barcodes
         val scanWidth = 300.dp.toPx()
         val scanHeight = 160.dp.toPx()
-
-        // Berechnung der Position, damit der Scan-Bereich exakt in der Mitte ist
         val left = (size.width - scanWidth) / 2
         val top = (size.height - scanHeight) / 2
         val right = left + scanWidth
         val bottom = top + scanHeight
 
-        // Ein Pfad, der den gesammten Bildschirm füllt
         val path = Path().apply {
             addRect(Rect(0f, 0f, size.width, size.height))
-
-            // Hier wird der Bereich für das innere Rechteck ausgeschnitten
             addRect(Rect(left, top, right, bottom))
             fillType = PathFillType.EvenOdd
         }
 
-        // Der abgedunkelte Bereich
         drawPath(
             path = path,
-            color = Color.Black.copy(alpha = 0.6f) //60% Schwarz
+            color = Color.Black.copy(alpha = 0.6f)
         )
-
-        // Der weiße Rahmen um den ausgeschnittenen Bereich
         drawRect(
             color = Color.White,
             topLeft = Offset(left, top),
             size = Size(scanWidth, scanHeight),
-            style = Stroke(width = 3.dp.toPx())
+            style = Stroke(width = 3.dp.toPx()
+            )
         )
-
         drawLine(
             color = Color.Red.copy(alpha = 0.8f),
             start = Offset(left + 20f, top + scanHeight / 2),
@@ -200,6 +209,7 @@ fun ScannerOverlay(modifier: Modifier = Modifier){
     }
 }
 
+// Der Codebereich für das Aufrufen der Kamera
 @Composable
 fun CameraPreview(
     modifier: Modifier = Modifier,
@@ -211,18 +221,12 @@ fun CameraPreview(
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            val previewView = PreviewView(ctx).apply {
-                scaleType = PreviewView.ScaleType.FILL_CENTER
-            }
-
+            val previewView = PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
-
-                val preview = Preview.Builder().build().apply {
-                    setSurfaceProvider(previewView.surfaceProvider)
-                }
+                val preview = Preview.Builder().build().apply { setSurfaceProvider(previewView.surfaceProvider) }
 
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -236,13 +240,7 @@ fun CameraPreview(
 
                 try {
                     cameraProvider.unbindAll()
-
-                    cameraProvider.bindToLifecycle(
-                        lifecycleOwner,
-                        cameraSelector,
-                        preview,
-                        imageAnalysis
-                    )
+                    cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
                 } catch (e: Exception) {
                     Log.e("CameraPreview", "Kamera konnte nicht gestartet werden", e)
                 }
@@ -254,6 +252,7 @@ fun CameraPreview(
     )
 }
 
+// Dieser Codeblock prüft, ob ein Barcode mit bestimmten Standards auf dem Kamerabild vorhanden ist
 @OptIn(ExperimentalGetImage::class)
 private fun processImageProxy(
     imageProxy: ImageProxy,
@@ -263,33 +262,24 @@ private fun processImageProxy(
     if (mediaImage != null) {
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
 
+        // Barcode-Standards
         val options = BarcodeScannerOptions.Builder()
             .setBarcodeFormats(
                 Barcode.FORMAT_EAN_13,
                 Barcode.FORMAT_EAN_8,
                 Barcode.FORMAT_UPC_A,
-                Barcode.FORMAT_UPC_E
-            )
+                Barcode.FORMAT_UPC_E)
             .build()
 
-        val scanner = BarcodeScanning.getClient()
-
-
+        val scanner = BarcodeScanning.getClient(options)
 
         scanner.process(image)
             .addOnSuccessListener { barcodes ->
                 for (barcode in barcodes) {
-                    barcode.rawValue?.let { code ->
-                        onBarcodeDetected(code)
-                    }
+                    barcode.rawValue?.let { code -> onBarcodeDetected(code) }
                 }
             }
-            .addOnFailureListener {
-
-            }
-            .addOnCompleteListener {
-                imageProxy.close()
-            }
+            .addOnCompleteListener { imageProxy.close() }
     } else {
         imageProxy.close()
     }

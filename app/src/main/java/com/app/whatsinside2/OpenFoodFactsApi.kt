@@ -39,7 +39,7 @@ object RetrofitInstance {
         .addInterceptor { chain ->
             val original = chain.request()
 
-            //Vorstellung der Anwendung
+            //Vorstellung der Anwendung bei OpenFoodFacts
             val request = original.newBuilder()
                 .header("User-Agent", "WhatsInsideAndroidApp - Version 1.0")
                 .method(original.method, original.body)
