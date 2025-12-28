@@ -4,11 +4,7 @@ import android.app.Application
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.app.whatsinside2.LocationEntity
-import com.app.whatsinside2.ProductEntity
-import com.app.whatsinside2.RetrofitInstance
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class DetailsViewModel(application: Application) : AndroidViewModel(application) {
@@ -95,7 +91,7 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         onSuccess: () -> Unit // Callback, wenn fertig
     ) {
         viewModelScope.launch {
-            // Entweder werden die übergebenen (aus dem Dialog) Daten oder die aktuellen (vom Screen) übernommen
+            // Entweder werden die übergebenen Daten aus dem Dialog oder die aktuellen Daten vom Screen übernommen
             val finalName = overrideName ?: name.value
             val finalBrand = overrideBrand ?: brand.value
             val finalLocation = overrideLocation ?: location.value
@@ -130,7 +126,7 @@ class DetailsViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Einfache SetterMethoden für die UI, um Werte zu ändern
+    // SetterMethoden für die UI, um Werte zu ändern
     fun updateQuantity(delta: Int) {
         val newValue = quantity.value + delta
         if (newValue >= 1) quantity.value = newValue

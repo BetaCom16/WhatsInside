@@ -16,6 +16,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestaurantMenu
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,8 +49,11 @@ fun StatisticsScreen(
     navController: NavController,
     viewModel: StatisticsViewModel = viewModel()
 ) {
-    // Live-Statistiken
     val stats by viewModel.stats.collectAsState()
+    val recipes by viewModel.suggestedRecipes.collectAsState()
+    val isRecipeLoading by viewModel.isLoadingRecipes.collectAsState()
+
+    val errorMessage by viewModel.recipeErrorMsg.collectAsState()
 
     Column(
         modifier = Modifier
@@ -47,6 +62,7 @@ fun StatisticsScreen(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+
         Text(
             text = "Übersicht",
             style = MaterialTheme.typography.headlineMedium,
@@ -55,81 +71,174 @@ fun StatisticsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Hier folgt der Code für das Diagramm zur Anzeige der Statistik
-        if(stats.totalItems > 0){
-            PantryPieChart(
-                stats = stats,
-                modifier = Modifier.size(200.dp)
-            )
-        } else{
-            Box(
-                modifier = Modifier.size(200.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Kein Daten",
-                    color = Color.Gray
-                )
+        if (stats.totalItems > 0) {
+            PantryPieChart(stats = stats, modifier = Modifier.size(200.dp))
+        } else {
+            Box(modifier = Modifier.size(200.dp), contentAlignment = Alignment.Center) {
+                Text("Keine Daten", color = Color.Gray)
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Die Legende des Diagramms
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            LegendItem(color = Color(0xFF4CAF50), text = "Gut (${stats.goodItems})")
+            LegendItem(color = Color(0xFFFFC107), text = "Bald fällig (${stats.expiringSoonItems})")
+            LegendItem(color = Color(0xFFF44336), text = "Abgelaufen (${stats.expiredItems})")
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            LegendItem(
-                color = Color(0xFF4CAF50),
-                text = "In Ordnung (${stats.goodItems})" // Grüne Farbe für noch haltbare Lebensmittel
+            Icon(
+                Icons.Default.AutoAwesome,
+                null,
+                tint = MaterialTheme.colorScheme.primary
             )
-            LegendItem(
-                color = Color(0xFFFFC107),
-                text = "Läuft bald ab (${stats.expiringSoonItems})" // Gelbe Farbe für bald ablaufende Lebensmittel
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = "Rezeptvorschläge",
+                style = MaterialTheme.typography.headlineSmall
             )
-            LegendItem(
-                color = Color(0xFFF44336),
-                text = "Abgelaufen (${stats.expiredItems})" // Rote Farbe für abgelaufene Lebensmittel
+        }
+
+        IconButton(onClick = { viewModel.generateRecipes() }) {
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Neue Rezeptvorschläge"
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Gesamt: ${stats.totalItems} Produkte",
-            style = MaterialTheme.typography.titleMedium
-        )
+        if (isRecipeLoading) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Der Koch überlegt...", style = MaterialTheme.typography.bodySmall)
+            }
+        } else if (errorMessage != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.WifiOff, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Fehler beim Laden",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = errorMessage ?: "Unbekannter Fehler",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
 
-        Spacer(modifier = Modifier.height(48.dp))
+                        Button(onClick = { viewModel.generateRecipes() }) {
+                            Text(
+                                text = "Erneut versuchen"
+                            )
+                        }
+                    }
+                }
+            }
+        } else if (recipes.isEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Text(
+                    text = "Lass dir anhand deines Vorratsschranks Rezepte vorschlagen",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(onClick = { viewModel.generateRecipes() }) {
+                    Text(
+                        text = "Rezepte generieren"
+                    )
+                }
+            }
+        } else {
+            recipes.forEach { recipe ->
+                RecipeItem(recipe = recipe)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-// Hilfsfunktionen für das Ring-Diagramm
+@Composable
+fun RecipeItem(recipe: Recipe) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = recipe.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Zutaten: ${recipe.ingredients.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.secondary
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = recipe.description,
+                style = MaterialTheme.typography.bodyMedium
+            )
+
+            if (recipe.missingIngredients.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Fehlt evtl.: ${recipe.missingIngredients.joinToString(", ")}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun PantryPieChart(
     stats: PantryStats,
     modifier: Modifier = Modifier,
     thickness: Dp = 30.dp
 ){
-    // Hier werden die Farben definiert
-    val colorGood = Color(0xFF4CAF50) // Grün
-    val colorSoon = Color(0xFFFFC107) // Geld
-    val colorExpired = Color(0xFFF44336) // Rot
+    val colorGood = Color(0xFF4CAF50)
+    val colorSoon = Color(0xFFFFC107)
+    val colorExpired = Color(0xFFF44336)
     val colorEmpty = Color.LightGray
 
     Canvas(modifier = modifier){
         val total = stats.totalItems.toFloat()
 
         if(total == 0f){
-            drawArc(
-                color = colorEmpty,
-                startAngle = 0f,
-                sweepAngle = 360f,
-                useCenter = false,
-                style = Stroke(width = thickness.toPx())
-            )
+            drawArc(color = colorEmpty, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = Stroke(width = thickness.toPx()))
             return@Canvas
         }
 
@@ -137,42 +246,18 @@ fun PantryPieChart(
         val angleSoon = (stats.expiringSoonItems / total) * 360f
         val angleExpired = (stats.expiredItems / total) * 360f
 
-        // Beginn der Aufteilung mittig oben
         var currentAngle = -90f
 
-        // Tortenstück für noch gute Lebensmittel
         if(angleGood > 0){
-            drawArc(
-                color = colorGood,
-                startAngle = currentAngle,
-                sweepAngle = angleGood,
-                useCenter = false,
-                style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt)
-            )
+            drawArc(color = colorGood, startAngle = currentAngle, sweepAngle = angleGood, useCenter = false, style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt))
             currentAngle += angleGood
         }
-
-        // Tortenstück für bald ablaufende Lebensmittel
         if(angleSoon > 0){
-            drawArc(
-                color = colorSoon,
-                startAngle = currentAngle,
-                sweepAngle = angleSoon,
-                useCenter = false,
-                style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt)
-            )
+            drawArc(color = colorSoon, startAngle = currentAngle, sweepAngle = angleSoon, useCenter = false, style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt))
             currentAngle += angleSoon
         }
-
-        // Tortenstück für abgelaufene Lebensmittels
         if(angleExpired > 0){
-            drawArc(
-                color = colorExpired,
-                startAngle = currentAngle,
-                sweepAngle = angleExpired,
-                useCenter = false,
-                style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt)
-            )
+            drawArc(color = colorExpired, startAngle = currentAngle, sweepAngle = angleExpired, useCenter = false, style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt))
         }
     }
 }
@@ -180,17 +265,8 @@ fun PantryPieChart(
 @Composable
 fun LegendItem(color: Color, text: String){
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(12.dp)
-                .background(color, shape = CircleShape)
-        )
-
+        Box(modifier = Modifier.size(12.dp).background(color, shape = CircleShape))
         Spacer(modifier = Modifier.width(4.dp))
-
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall
-        )
+        Text(text = text, style = MaterialTheme.typography.bodySmall)
     }
 }

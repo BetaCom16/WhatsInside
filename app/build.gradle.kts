@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,9 +10,7 @@ plugins {
 
 android {
     namespace = "com.app.whatsinside2"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.app.whatsinside2"
@@ -19,6 +20,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Key aus local properties lesen
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localProperties.load(FileInputStream(localPropertiesFile))
+        }
+
+        // Key holen oder leeren String, falls er nicht gefunden wurde
+        val apiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
+
+        // Den Key als Variable verfügbar machen
+        buildConfigField("String", "GEMINI_API_KEY", "\"$apiKey\"")
+    }
+
+    buildFeatures{
+        compose = true
+        buildConfig = true
     }
 
     buildTypes {
@@ -37,14 +56,9 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
-    buildFeatures {
-        compose = true
-    }
 }
 
 dependencies {
-    implementation(libs.androidx.material3)
-    implementation(libs.androidx.compose.foundation.layout)
     val nav_version = "2.8.0"
     val camera_version = "1.3.4"
     val room_version = "2.6.1"
@@ -58,6 +72,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.foundation.layout)
 
     //Für die Navigation
     implementation("androidx.navigation:navigation-compose:${nav_version}")
@@ -85,6 +101,9 @@ dependencies {
 
     //Für bestimmte Icons wie z.B. Remove
     implementation("androidx.compose.material:material-icons-extended")
+
+    //Für die Kommunikation mit Google Gemini
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
