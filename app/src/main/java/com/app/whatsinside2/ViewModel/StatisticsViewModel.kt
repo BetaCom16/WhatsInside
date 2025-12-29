@@ -23,7 +23,6 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
     private val db = WhatsInsideDatabase.getDatabase(application)
     private val productDao = db.productDao()
     private val recipeRepository = RecipeRepository()
-
     private val productsFlow = productDao.getAllProducts()
 
     val stats: StateFlow<PantryStats> = productsFlow
@@ -45,11 +44,9 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
             isLoadingRecipes.value = true
             recipeErrorMsg.value = null
 
-            //Einmaliges "holen" des aktuellen Vorratsschranks
             val currentProducts = productsFlow.first()
 
             if(currentProducts.isNotEmpty()){
-
                 val result = recipeRepository.getRecipesFromGemini(currentProducts)
 
                 result.onSuccess { recipes ->
@@ -65,26 +62,38 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
             isLoadingRecipes.value = false
         }
     }
-}
 
-private fun calculateStats(products: List<ProductEntity>): PantryStats {
-    val now = System.currentTimeMillis()
-    val threeDaysInMillis = 3 * 24 * 60 * 60 * 1000L
-    val warningThreshold = now + threeDaysInMillis
 
-    var expired = 0
-    var soon = 0
-    var good = 0
+    // Funktion als Companion-Object, um es von außen für den Unittest greifbar zu machen
+    companion object {
+        fun calculateStats(
+            products: List<ProductEntity>,
+            currentTimeMillis: Long = System.currentTimeMillis()
+        ): PantryStats {
 
-    products.forEach { product ->
-        val expDate = product.expirationDate
-        if (expDate != null) {
-            if (expDate < now) expired++
-            else if (expDate < warningThreshold) soon++
-            else good++
-        } else {
-            good++
+            val threeDaysInMillis = 3 * 24 * 60 * 60 * 1000L
+            val warningThreshold = currentTimeMillis + threeDaysInMillis
+
+            var expired = 0
+            var soon = 0
+            var good = 0
+
+            products.forEach { product ->
+                val expDate = product.expirationDate
+                if (expDate != null) {
+                    // Hier vergleichen wir mit der übergebenen Zeit
+                    if (expDate < currentTimeMillis) {
+                        expired++
+                    } else if (expDate < warningThreshold) {
+                        soon++
+                    } else {
+                        good++
+                    }
+                } else {
+                    good++
+                }
+            }
+            return PantryStats(products.size, expired, soon, good)
         }
     }
-    return PantryStats(products.size, expired, soon, good)
 }
