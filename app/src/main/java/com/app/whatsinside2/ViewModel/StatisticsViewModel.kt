@@ -52,10 +52,12 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
                 result.onSuccess { recipes ->
                     _suggestedRecipes.value = recipes
                 }.onFailure { exception ->
+                    // Leere Liste, falls ein Fehler auftritt
                     _suggestedRecipes.value = emptyList()
                     recipeErrorMsg.value = exception.message ?: "Unbekannter Fehler"
                 }
             } else {
+                // Zeigt nichts an, wenn die DB leer ist
                 _suggestedRecipes.value = emptyList()
                 recipeErrorMsg.value = "Der Vorratsschrank ist leer!"
             }
@@ -64,7 +66,7 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
     }
 
 
-    // Funktion als Companion-Object, um es von außen für den Unittest greifbar zu machen
+    // Funktion als Companion-Object, um es von außen für den Unittest StatisticsViewModelTest greifbar zu machen
     companion object {
         fun calculateStats(
             products: List<ProductEntity>,
@@ -74,6 +76,7 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
             val threeDaysInMillis = 3 * 24 * 60 * 60 * 1000L
             val warningThreshold = currentTimeMillis + threeDaysInMillis
 
+            //Counter für gute, bald ablaufende und abgelaufene Produkte
             var expired = 0
             var soon = 0
             var good = 0
@@ -81,7 +84,8 @@ class StatisticsViewModel(application: Application) : AndroidViewModel(applicati
             products.forEach { product ->
                 val expDate = product.expirationDate
                 if (expDate != null) {
-                    // Hier vergleichen wir mit der übergebenen Zeit
+                    // Hier wird mit der übergebenen Zeit verglichen
+                    // Zählt die jeweilige Kategorie hoch, wenn die Bedingung erfüllt ist
                     if (expDate < currentTimeMillis) {
                         expired++
                     } else if (expDate < warningThreshold) {

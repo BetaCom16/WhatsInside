@@ -81,6 +81,7 @@ fun StatisticsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        //Farbcodierung für die Elemente der Statistik
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             LegendItem(color = Color(0xFF4CAF50), text = "Gut (${stats.goodItems})")
             LegendItem(color = Color(0xFFFFC107), text = "Bald fällig (${stats.expiringSoonItems})")
@@ -116,6 +117,7 @@ fun StatisticsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Codeblock für die Generierung und ggf. Wartezeit der Rezepte von Gemini
         if (isRecipeLoading) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 CircularProgressIndicator()
@@ -229,6 +231,7 @@ fun PantryPieChart(
     modifier: Modifier = Modifier,
     thickness: Dp = 30.dp
 ){
+    // Statistik des Vorratsschranks
     val colorGood = Color(0xFF4CAF50)
     val colorSoon = Color(0xFFFFC107)
     val colorExpired = Color(0xFFF44336)
@@ -248,6 +251,7 @@ fun PantryPieChart(
 
         var currentAngle = -90f
 
+        // Unterteilung der Produkte in die jeweilige Kategorie mit farblicher Hervorhebung
         if(angleGood > 0){
             drawArc(color = colorGood, startAngle = currentAngle, sweepAngle = angleGood, useCenter = false, style = Stroke(width = thickness.toPx(), cap = StrokeCap.Butt))
             currentAngle += angleGood

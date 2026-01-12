@@ -109,15 +109,21 @@ fun DetailsScreen(
     if(showDatePicker){
         val datePickerState = rememberDatePickerState(initialSelectedDateMillis = expirationDate)
         DatePickerDialog(
+            // Schließt den Dialog, wenn man woanders hin tippt
             onDismissRequest = { showDatePicker = false },
+            // Speichert das Datum
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.updateDate(datePickerState.selectedDateMillis)
                     showDatePicker = false
                 }) { Text("OK") }
             },
+            // Schließt den Dialog
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Abbrechen") } }
-        ) { DatePicker(state = datePickerState) }
+        ) {
+            // Der optische Kalender zum Auswählen des Datums
+            DatePicker(state = datePickerState)
+        }
     }
 
     if(showManualDialog){
